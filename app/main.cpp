@@ -5,10 +5,20 @@
 #define LINE_THICKNESS 1
 #define PIXEL_SIZE 25
 
-int main()
+int main(int argc, char **argv)
 {
+    // Get image path from command line arguments
+    if (argc < 2)
+    {
+        std::cerr << "Usage: " << argv[0] << " <image_path> " << std::endl;
+        return 1;
+    }
 
-    cv::Mat image = cv::imread("/home/fio/dragonite.png");
+    cv::Mat image = cv::imread(argv[1]);
+
+    std::string output_path = argv[1];
+    size_t lastindex = output_path.find_last_of(".");
+    output_path = output_path.substr(0, lastindex) + "_tapestry.png";
 
     // cv::imshow("Dragonite", image);
 
@@ -82,11 +92,11 @@ int main()
 
         int real_row = num_rows - num_row; // Calculate the real row number
 
-        if (real_row % 2 == 0) // [WS]
+        if (real_row % 2 == 0) // [RS]
         {
             cv::putText(tapestry, std::to_string(real_row), cv::Point(x1, y), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 0), 1);
         }
-        else // [RS]
+        else // [WS]
         {
             cv::putText(tapestry, std::to_string(real_row), cv::Point(x2, y), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 0), 1);
         }
@@ -135,24 +145,131 @@ int main()
         color_counts.push_back(current_row);
     }
 
-    std::cout << "Color counts per row:" << std::endl;
+    int num_new_rows = num_rows * pixel_size + (num_rows - 1) * line_space + margin;
+
+    cv::Mat instructions(num_new_rows, new_cols, CV_8UC3, cv::Scalar(255, 255, 255));
+
     for (int num_row = 0; num_row < color_counts.size(); ++num_row)
     {
-        std::cout << "Row " << num_row + 1 << ": ";
-        for (const auto &color_count : color_counts[num_row])
+        std::string text = "Row ";
+        if (num_row < 9)
         {
-            std::cout << "(" << (int)color_count.color[2] << ", "
-                      << (int)color_count.color[1] << ", "
-                      << (int)color_count.color[0] << ") x " << color_count.count << " | ";
+            text += " ";
         }
-        std::cout << std::endl;
+
+        text += std::to_string(num_row + 1) + " ";
+
+        if (num_row % 2 == 0)
+        {
+            text += "[RS] <- : ";
+        }
+        else
+        {
+            text += "[WS] -> : ";
+        }
+
+        cv::Size text_size = cv::getTextSize(text, cv::FONT_HERSHEY_SIMPLEX, 0.5, 1, nullptr);
+
+        int x_offset = margin / 4;
+        int y = margin / 2 + num_row * (pixel_size + line_space) + pixel_size / 2;
+        cv::putText(instructions,
+                    text,
+                    cv::Point(x_offset, y),
+                    cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 0), 1);
+
+        int color_x = x_offset + text_size.width;
+        for (int num_color = 0; num_color < color_counts[num_row].size(); ++num_color)
+        {
+            // Rectangle fill
+            cv::rectangle(instructions,
+                          cv::Point(color_x, y - pixel_size / 2),
+                          cv::Point(color_x + pixel_size, y + pixel_size / 2),
+                          cv::Scalar(color_counts[num_row][num_color].color[0], color_counts[num_row][num_color].color[1], color_counts[num_row][num_color].color[2]), cv::FILLED);
+
+            // Surounding box
+            cv::rectangle(instructions,
+                          cv::Point(color_x, y - pixel_size / 2),
+                          cv::Point(color_x + pixel_size, y + pixel_size / 2),
+                          cv::Scalar(0, 0, 0), line_thickness);
+
+            color_x += pixel_size + line_space;
+
+            std::string count_text = std::to_string(color_counts[num_row][num_color].count);
+            cv::Size count_text_size = cv::getTextSize(count_text, cv::FONT_HERSHEY_SIMPLEX, 0.5, 4, nullptr);
+            int count_y = y + (count_text_size.height / 2);
+            cv::putText(instructions,
+                        count_text,
+                        cv::Point(color_x - pixel_size - line_space + (pixel_size - count_text_size.width) / 2 + 2, count_y),
+                        cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255, 255, 255), 4);
+
+            count_text_size = cv::getTextSize(count_text, cv::FONT_HERSHEY_SIMPLEX, 0.5, 2, nullptr);
+            count_y = y + (count_text_size.height / 2);
+            cv::putText(instructions,
+                        count_text,
+                        cv::Point(color_x - pixel_size - line_space + (pixel_size - count_text_size.width) / 2 + 1, count_y),
+                        cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 0), 2);
+        }
     }
 
-    cv::imshow("Tapestry", tapestry);
+    cv::Mat combined(tapestry.rows + instructions.rows, tapestry.cols, CV_8UC3, cv::Scalar(255, 255, 255));
+    tapestry.copyTo(combined(cv::Rect(0, 0, tapestry.cols, tapestry.rows)));
+    instructions.copyTo(combined(cv::Rect(0, tapestry.rows, instructions.cols, instructions.rows)));
 
-    cv::waitKey(0);
+    for (int num_color = 0; num_color < colors_used.size(); ++num_color)
+    {
+        int y_offset = tapestry.rows - margin / 2;
+        cv::rectangle(combined,
+                      cv::Point(margin + num_color * (pixel_size + line_space), y_offset),
+                      cv::Point(margin + num_color * (pixel_size + line_space) + pixel_size, y_offset + pixel_size),
+                      cv::Scalar(colors_used[num_color][0], colors_used[num_color][1], colors_used[num_color][2]), cv::FILLED);
 
-    std::cout << "Colors used: " << colors_used.size() << std::endl;
+        cv::rectangle(combined,
+                      cv::Point(margin + num_color * (pixel_size + line_space), y_offset),
+                      cv::Point(margin + num_color * (pixel_size + line_space) + pixel_size, y_offset + pixel_size),
+                      cv::Scalar(0, 0, 0), line_thickness);
+    }
+
+    // Conversió a prePDF
+    const int page_width = 2480; // A4 a 300 DPI
+    const int page_height = 3508;
+
+    double scale = std::min(
+        (double)page_width / combined.cols,
+        (double)page_height / combined.rows);
+
+    cv::Mat resized;
+    cv::resize(
+        combined,
+        resized,
+        cv::Size(),
+        scale,
+        scale,
+        cv::INTER_CUBIC);
+
+    cv::Mat page(
+        page_height,
+        page_width,
+        combined.type(),
+        cv::Scalar(255, 255, 255) // fons blanc
+    );
+
+    int x = (page_width - resized.cols) / 2;
+    int y = (page_height - resized.rows) / 2;
+
+    resized.copyTo(
+        page(
+            cv::Rect(
+                x,
+                y,
+                resized.cols,
+                resized.rows)));
+
+    // cv::imshow("Final", page);
+    //  cv::imshow("Instructions", instructions);
+
+    cv::imwrite(output_path, page);
+
+    // cv::waitKey(0);
 
     return 0;
 }
