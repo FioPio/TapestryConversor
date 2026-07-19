@@ -281,11 +281,11 @@ cv::Mat DrawBubbleInstructions(const std::vector<std::vector<ColorCount>> &color
 
             if (sub_row == 0)
             {
-                text += "[WS] -> (SC): ";
+                text += "[RS] <- (SC): ";
             }
             else
             {
-                text += "[RS] -> (BU): ";
+                text += "[WS] -> (BU): ";
             }
 
             cv::Size text_size = cv::getTextSize(text, cv::FONT_HERSHEY_SIMPLEX, 0.5, 1, nullptr);
@@ -301,7 +301,7 @@ cv::Mat DrawBubbleInstructions(const std::vector<std::vector<ColorCount>> &color
             int color_x = x_offset + text_size.width;
             for (int num_color = 0; num_color < color_counts[num_row].size(); ++num_color)
             {
-                int use_color = sub_row == 0 ? num_color : color_counts[num_row].size() - 1 - num_color;
+                int use_color = sub_row == 0 ? color_counts[num_row].size() - 1 - num_color : num_color;
 
                 // Rectangle fill
                 cv::rectangle(instructions,
@@ -317,7 +317,14 @@ cv::Mat DrawBubbleInstructions(const std::vector<std::vector<ColorCount>> &color
 
                 color_x += config.pixel_size + line_space;
 
-                std::string count_text = std::to_string(color_counts[num_row][use_color].count * (2 - sub_row));
+                int added = 0;
+                if (sub_row == 0 && num_color == color_counts[num_row].size() - 1)
+                {
+                    added = 1;
+                }
+
+                std::string count_text = std::to_string(color_counts[num_row][use_color].count * (2 - sub_row) + added);
+
                 cv::Size count_text_size = cv::getTextSize(count_text, cv::FONT_HERSHEY_SIMPLEX, 0.5, 4, nullptr);
                 int count_y = y + (count_text_size.height / 2);
                 cv::putText(instructions,
